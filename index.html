@@ -515,7 +515,15 @@
             </select>
             <span class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] th-text-muted">▼</span>
           </div>
-
+<button
+  type="button"
+  id="toggle-effects-btn"
+  class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
+  title="Bật hoặc tắt hiệu ứng thời tiết cho đỡ hao pin"
+>
+  <span id="toggle-effects-icon">✨</span>
+  <span class="hidden sm:inline">Hiệu ứng</span>
+</button>
           <button
             type="button"
             onclick="app.toggleMusicDrawer()"
@@ -4230,6 +4238,36 @@ p { text-align: justify; margin-bottom: 0.95em; }
 
   // Khôi phục nền đã chọn từ lần đọc trước
   applyBg(localStorage.getItem(KEY) || '');
+})();
+    // --- BẬT / TẮT HIỆU ỨNG THỜI TIẾT (LƯU LOCALSTORAGE) ---
+(function initEffectsToggle() {
+  const btn = document.getElementById('toggle-effects-btn');
+  const icon = document.getElementById('toggle-effects-icon');
+  const canvas = document.querySelector('canvas');
+  const KEY = 'thugian_effects_enabled';
+
+  if (!btn || !canvas) return;
+
+  // Mặc định bật (trừ khi điện thoại đang bật chế độ giảm chuyển động)
+  let enabled = localStorage.getItem(KEY);
+  enabled = enabled !== null
+    ? enabled === 'true'
+    : !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function applyState() {
+    window.__effectsPaused = !enabled;
+    canvas.style.display = enabled ? 'block' : 'none';
+    btn.style.opacity = enabled ? '1' : '0.55';
+    if (icon) icon.textContent = enabled ? '✨' : '💤';
+    localStorage.setItem(KEY, String(enabled));
+  }
+
+  btn.addEventListener('click', () => {
+    enabled = !enabled;
+    applyState();
+  });
+
+  applyState();
 })();
   </script>
 </body>
