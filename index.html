@@ -348,6 +348,55 @@
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 999px; }
+ /* Nền đọc riêng cho trình đọc (Trắng kem / Vàng giấy sách / Tối) */
+#reader-modal[data-reader-theme="light"] {
+  background-color: #fdfdfd !important;
+  background-image: none !important;
+  color: #222222 !important;
+}
+
+#reader-modal[data-reader-theme="sepia"] {
+  background-color: #f4ecd8 !important;
+  background-image: none !important;
+  color: #3b2f2f !important;
+}
+
+#reader-modal[data-reader-theme="dark"] {
+  background-color: #181a1f !important;
+  background-image: none !important;
+  color: #d1d5db !important;
+}
+
+/* Chỉnh lại màu chữ phụ cho dễ nhìn khi bật nền tối */
+#reader-modal[data-reader-theme="dark"] .th-text-muted {
+  color: #9ca3af !important;
+}
+
+/* 3 nút tròn chọn nền đọc */
+.reader-themes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.theme-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-dot[data-set-theme="light"] { background: #fdfdfd; }
+.theme-dot[data-set-theme="sepia"] { background: #f4ecd8; }
+.theme-dot[data-set-theme="dark"]  { background: #181a1f; border-color: rgba(255, 255, 255, 0.35); }
+
+.theme-dot.active {
+  border-color: #3b82f6;
+  transform: scale(1.18);
+}
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-pink-300/30">
@@ -717,6 +766,11 @@
         </button>
 
         <button type="button" onclick="app.cycleTheme()" class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs hover:opacity-80" title="Đổi 4 giao diện">🎨</button>
+        <div class="reader-themes" role="group" aria-label="Nền đọc riêng">
+          <button type="button" class="theme-dot" data-set-theme="light" title="Nền trắng kem"></button>
+          <button type="button" class="theme-dot" data-set-theme="sepia" title="Vàng giấy sách"></button>
+          <button type="button" class="theme-dot" data-set-theme="dark" title="Chế độ tối đọc đêm"></button>
+        </div>
         <button type="button" id="reader-bookmark-btn" onclick="app.bookmarkCurrentReaderItem()" class="px-2.5 py-1.5 rounded-xl border th-border th-subtle-pink th-pink text-xs font-semibold hover:opacity-85">🔖</button>
       </div>
     </div>
@@ -4147,6 +4201,36 @@ p { text-align: justify; margin-bottom: 0.95em; }
     applySiteMusicConfig(false);
     renderApp();
     initRealtimeSubscriptions();
+    // --- CHỌN NỀN ĐỌC RIÊNG (LƯU VÀO LOCALSTORAGE) ---
+(function initReaderBgThemes() {
+  const modal = document.getElementById('reader-modal');
+  const dots = document.querySelectorAll('.theme-dot');
+  const KEY = 'thugian_reader_bg_theme';
+
+  function applyBg(theme) {
+    if (!modal) return;
+    if (!theme) {
+      modal.removeAttribute('data-reader-theme');
+      localStorage.removeItem(KEY);
+    } else {
+      modal.setAttribute('data-reader-theme', theme);
+      localStorage.setItem(KEY, theme);
+    }
+    dots.forEach((btn) => btn.classList.toggle('active', btn.dataset.setTheme === theme));
+  }
+
+  dots.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const clicked = btn.dataset.setTheme;
+      const current = modal?.getAttribute('data-reader-theme');
+      // Bấm lại vào chính chấm đang chọn -> quay về nền mặc định của web
+      applyBg(current === clicked ? '' : clicked);
+    });
+  });
+
+  // Khôi phục nền đã chọn từ lần đọc trước
+  applyBg(localStorage.getItem(KEY) || '');
+})();
   </script>
 </body>
 </html>
