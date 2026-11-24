@@ -578,6 +578,7 @@
   <span class="hidden sm:inline">Tủ sách</span>
   <span id="header-saved-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white" style="background:linear-gradient(135deg,#60a5fa,#f472b6);">0</span>
 </button>
+          <button
             type="button"
             onclick="app.toggleMusicDrawer()"
             title="Mở / Thu gọn trình phát nhạc"
@@ -853,6 +854,43 @@
           <header id="reader-header-area" class="text-center pb-6 mb-8 border-b th-border"></header>
           <div id="reader-body-prose" class="novel-prose"></div>
           <div id="reader-footer-area" class="mt-10 pt-6 border-t th-border space-y-5"></div>
+          <!-- Khu vực Cảm xúc & Bình luận cuối chương -->
+          <section id="chapter-engagement" class="mt-8 pt-6 border-t th-border space-y-6">
+            <div>
+              <p class="text-sm font-semibold mb-3">Cảm xúc của bạn sau chương này?</p>
+              <div id="reaction-bar" class="flex flex-wrap gap-2">
+                <button type="button" class="react-btn" data-react="heart">❤️ <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="cry">😭 <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="wow">🤯 <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="laugh">😂 <span class="react-count">0</span></button>
+              </div>
+            </div>
+
+            <div>
+              <h4 class="text-sm font-semibold mb-3">💬 Bình luận (<span id="comment-count">0</span>)</h4>
+
+              <div id="comment-login-prompt" class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border th-border text-xs mb-4">
+                <span>Đăng nhập bằng Google để thả cảm xúc và bình luận cùng mọi người nhé.</span>
+                <button type="button" id="comment-google-login-btn" class="px-3 py-1.5 rounded-lg text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+                  Đăng nhập Google
+                </button>
+              </div>
+
+              <form id="comment-form" class="mb-4 space-y-2" hidden>
+                <textarea id="comment-input" rows="3" maxlength="500" required
+                  placeholder="Viết cảm nhận của bạn về chương này (tối đa 500 ký tự)..."
+                  class="w-full p-3 rounded-xl border th-border bg-transparent text-sm focus:outline-none"></textarea>
+                <div class="flex items-center justify-between">
+                  <span id="comment-char-count" class="text-xs th-text-muted">0 / 500</span>
+                  <button type="submit" id="comment-submit-btn" class="px-4 py-1.5 rounded-lg text-white text-xs font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+                    Gửi bình luận
+                  </button>
+                </div>
+              </form>
+
+              <ul id="comment-list" class="space-y-3"></ul>
+            </div>
+          </section>
         </article>
       </div>
     </div>
@@ -870,7 +908,6 @@
       signOut,
       onAuthStateChanged,
       sendEmailVerification,
-      sendEmailVerification,
   GoogleAuthProvider,
   signInWithPopup
     } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
@@ -885,7 +922,6 @@
       onSnapshot,
       query,
       orderBy,
-      runTransaction,
       runTransaction,
   getDoc,
   getDocs,
@@ -3495,43 +3531,6 @@ p { text-align: justify; margin-bottom: 0.95em; }
       const headerArea = document.getElementById("reader-header-area");
       const proseArea = document.getElementById("reader-body-prose");
       const footerArea = document.getElementById("reader-footer-area");
-<!-- Khu vực Cảm xúc & Bình luận cuối chương -->
-          <section id="chapter-engagement" class="mt-8 pt-6 border-t th-border space-y-6">
-            <div>
-              <p class="text-sm font-semibold mb-3">Cảm xúc của bạn sau chương này?</p>
-              <div id="reaction-bar" class="flex flex-wrap gap-2">
-                <button type="button" class="react-btn" data-react="heart">❤️ <span class="react-count">0</span></button>
-                <button type="button" class="react-btn" data-react="cry">😭 <span class="react-count">0</span></button>
-                <button type="button" class="react-btn" data-react="wow">🤯 <span class="react-count">0</span></button>
-                <button type="button" class="react-btn" data-react="laugh">😂 <span class="react-count">0</span></button>
-              </div>
-            </div>
-
-            <div>
-              <h4 class="text-sm font-semibold mb-3">💬 Bình luận (<span id="comment-count">0</span>)</h4>
-
-              <div id="comment-login-prompt" class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border th-border text-xs mb-4">
-                <span>Đăng nhập bằng Google để thả cảm xúc và bình luận cùng mọi người nhé.</span>
-                <button type="button" id="comment-google-login-btn" class="px-3 py-1.5 rounded-lg text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
-                  Đăng nhập Google
-                </button>
-              </div>
-
-              <form id="comment-form" class="mb-4 space-y-2" hidden>
-                <textarea id="comment-input" rows="3" maxlength="500" required
-                  placeholder="Viết cảm nhận của bạn về chương này (tối đa 500 ký tự)..."
-                  class="w-full p-3 rounded-xl border th-border bg-transparent text-sm focus:outline-none"></textarea>
-                <div class="flex items-center justify-between">
-                  <span id="comment-char-count" class="text-xs th-text-muted">0 / 500</span>
-                  <button type="submit" id="comment-submit-btn" class="px-4 py-1.5 rounded-lg text-white text-xs font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
-                    Gửi bình luận
-                  </button>
-                </div>
-              </form>
-
-              <ul id="comment-list" class="space-y-3"></ul>
-            </div>
-          </section>
       if (mode === "series") {
         const ser = getVisibleSeries().find((s) => s.id === id);
         if (!ser) return;
@@ -4596,62 +4595,7 @@ if ('serviceWorker' in navigator) {
 
   onAuthStateChanged(rAuth, () => syncAuthUI());
 }
-    // --- TỦ SÁCH & GÓC CÁ NHÂN ĐỘC GIẢ (LOCALSTORAGE + FIRESTORE) ---
-{
-  const BS_KEY = 'thugian_bookshelf_v2';
-  const bsAuth = getAuth();
-  const bsDb = getFirestore();
-  const bsProvider = new GoogleAuthProvider();
 
-  let savedStories = [];
-  try {
-    savedStories = JSON.parse(localStorage.getItem(BS_KEY)) || [];
-  } catch { savedStories = []; }
-
-  const modal = document.getElementById('bookshelf-modal');
-  const openBtn = document.getElementById('open-bookshelf-btn');
-  const closeBtn = document.getElementById('close-bookshelf-btn');
-  const countBadge = document.getElementById('header-saved-count');
-  const listEl = document.getElementById('bs-story-list');
-  const syncEl = document.getElementById('bs-sync-status');
-
-  function getRealReader() {
-    const u = bsAuth.currentUser;
-    return u && !u.isAnonymous ? u : null;
-  }
-
-  async function saveBookshelf() {
-    localStorage.setItem(BS_KEY, JSON.stringify(savedStories));
-    renderBookshelfUI();
-    const user = getRealReader();
-    if (user) {
-      try {
-        await setDoc(doc(bsDb, 'readerProfiles', user.uid), {
-          savedStories,
-          updatedAt: Date.now()
-        }, { merge: true });
-        if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
-      } catch {
-        if (syncEl) syncEl.textContent = 'Lưu trên máy';
-      }
-    }
-  }
-
-  function renderBookshelfUI() {
-    if (countBadge) countBadge.textContent = String(savedStories.length);
-    if (!listEl) return;
-
-    if (!savedStories.length) {
-      listEl.innerHTML = `<li class="text-xs th-text-muted text-center py-4">Chưa có truyện nào. Mở đọc một chương rồi bấm nút ❤️ Theo dõi nhé!</li>`;
-      return;
-    }
-
-    listEl.innerHTML = savedStories.map((item, idx) => `
-      <li class="flex items-center justify-between gap-2 p-2.5 rounded-xl border th-border">
-        <div class="min-w-0">
-          <p class="font-semibold text-xs truncate">${item.title}</p>
-          <p class="text-[11px] th-text-muted truncate">${item.meta || 'Đang theo dõi'}</p>
-        </div>
         <button type="button" data-rm-bs="${idx}" class="px-2 py-1 rounded-lg border th-border text-[11px] text-red-500 shrink-0">Bỏ lưu</button>
       </li>
     `).join('');
@@ -4759,4 +4703,40 @@ if ('serviceWorker' in navigator) {
 }
   </script>
 </body>
+  <!-- Modal Tủ sách & Góc cá nhân độc giả -->
+<div id="bookshelf-modal" class="fixed inset-0 z-[80] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);">
+  <div class="w-full max-w-md rounded-2xl border th-border th-card p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+    <div class="flex items-center justify-between border-b th-border pb-3">
+      <h3 class="font-bold text-base">📚 Tủ sách & Cá nhân</h3>
+      <button type="button" id="close-bookshelf-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">✕</button>
+    </div>
+
+    <!-- Chưa đăng nhập -->
+    <div id="bs-guest-box" class="p-3.5 rounded-xl border th-border text-xs space-y-2.5">
+      <p>Đăng nhập Google để đồng bộ Tủ sách giữa điện thoại và máy tính (chưa đăng nhập vẫn lưu được ngay trên máy này).</p>
+      <button type="button" id="bs-google-login-btn" class="w-full py-2 rounded-xl text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+        Đăng nhập với Google
+      </button>
+    </div>
+
+    <!-- Đã đăng nhập -->
+    <div id="bs-user-box" class="hidden flex items-center gap-3 p-3 rounded-xl border th-border">
+      <img id="bs-user-avatar" src="/icon-192.png" alt="" class="w-10 h-10 rounded-full object-cover border border-pink-300" />
+      <div class="flex-1 min-w-0">
+        <p id="bs-user-name" class="text-sm font-bold truncate"></p>
+        <p id="bs-user-email" class="text-[11px] th-text-muted truncate"></p>
+      </div>
+      <button type="button" id="bs-logout-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">Đăng xuất</button>
+    </div>
+
+    <!-- Danh sách truyện đã lưu -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wide th-text-muted">Truyện đang theo dõi</h4>
+        <span id="bs-sync-status" class="text-[11px] th-text-muted">Lưu trên máy</span>
+      </div>
+      <ul id="bs-story-list" class="space-y-2 text-sm"></ul>
+    </div>
+  </div>
+</div>
 </html>
