@@ -397,6 +397,32 @@
   border-color: #3b82f6;
   transform: scale(1.18);
 }
+    .react-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: transparent;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.react-btn:active { transform: scale(0.93); }
+.react-btn.is-active {
+  border-color: #f472b6;
+  background: rgba(244, 114, 182, 0.16);
+  font-weight: 600;
+}
+.author-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #60a5fa, #f472b6);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+}
   </style>
   <!-- PWA & Open Graph chia sẻ link -->
 <link rel="manifest" href="/manifest.json" />
@@ -535,6 +561,16 @@
 <button
   type="button"
   id="toggle-effects-btn"
+  <button
+  type="button"
+  id="open-bookshelf-btn"
+  class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
+  title="Tủ sách & Góc cá nhân"
+>
+  <span>👤</span>
+  <span class="hidden sm:inline">Tủ sách</span>
+  <span id="header-saved-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white" style="background:linear-gradient(135deg,#60a5fa,#f472b6);">0</span>
+</button>
   class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
   title="Bật hoặc tắt hiệu ứng thời tiết cho đỡ hao pin"
 >
@@ -833,7 +869,10 @@
       signInAnonymously,
       signOut,
       onAuthStateChanged,
-      sendEmailVerification
+      sendEmailVerification,
+      sendEmailVerification,
+  GoogleAuthProvider,
+  signInWithPopup
     } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
     import {
       getFirestore,
@@ -846,7 +885,13 @@
       onSnapshot,
       query,
       orderBy,
-      runTransaction
+      runTransaction,
+      runTransaction,
+  getDoc,
+  getDocs,
+  limit,
+  serverTimestamp,
+  deleteField
     } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
     // =========================================================================
@@ -2370,6 +2415,42 @@ service cloud.firestore {
 <head><meta charset="utf-8"/><title>${escXml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body class="cover-body">
   <div class="cover-wrap"><img src="images/cover.jpg" alt="${escXml(title)}"/></div>
+  <!-- Modal Tủ sách & Góc cá nhân độc giả -->
+<div id="bookshelf-modal" class="fixed inset-0 z-[80] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);">
+  <div class="w-full max-w-md rounded-2xl border th-border th-card p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+    <div class="flex items-center justify-between border-b th-border pb-3">
+      <h3 class="font-bold text-base">📚 Tủ sách & Cá nhân</h3>
+      <button type="button" id="close-bookshelf-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">✕</button>
+    </div>
+
+    <!-- Chưa đăng nhập -->
+    <div id="bs-guest-box" class="p-3.5 rounded-xl border th-border text-xs space-y-2.5">
+      <p>Đăng nhập Google để đồng bộ Tủ sách giữa điện thoại và máy tính (chưa đăng nhập vẫn lưu được ngay trên máy này).</p>
+      <button type="button" id="bs-google-login-btn" class="w-full py-2 rounded-xl text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+        Đăng nhập với Google
+      </button>
+    </div>
+
+    <!-- Đã đăng nhập -->
+    <div id="bs-user-box" class="hidden flex items-center gap-3 p-3 rounded-xl border th-border">
+      <img id="bs-user-avatar" src="/icon-192.png" alt="" class="w-10 h-10 rounded-full object-cover border border-pink-300" />
+      <div class="flex-1 min-w-0">
+        <p id="bs-user-name" class="text-sm font-bold truncate"></p>
+        <p id="bs-user-email" class="text-[11px] th-text-muted truncate"></p>
+      </div>
+      <button type="button" id="bs-logout-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">Đăng xuất</button>
+    </div>
+
+    <!-- Danh sách truyện đã lưu -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wide th-text-muted">Truyện đang theo dõi</h4>
+        <span id="bs-sync-status" class="text-[11px] th-text-muted">Lưu trên máy</span>
+      </div>
+      <ul id="bs-story-list" class="space-y-2 text-sm"></ul>
+    </div>
+  </div>
+</div>
 </body>
 </html>`);
         }
@@ -3414,7 +3495,43 @@ p { text-align: justify; margin-bottom: 0.95em; }
       const headerArea = document.getElementById("reader-header-area");
       const proseArea = document.getElementById("reader-body-prose");
       const footerArea = document.getElementById("reader-footer-area");
+<!-- Khu vực Cảm xúc & Bình luận cuối chương -->
+          <section id="chapter-engagement" class="mt-8 pt-6 border-t th-border space-y-6">
+            <div>
+              <p class="text-sm font-semibold mb-3">Cảm xúc của bạn sau chương này?</p>
+              <div id="reaction-bar" class="flex flex-wrap gap-2">
+                <button type="button" class="react-btn" data-react="heart">❤️ <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="cry">😭 <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="wow">🤯 <span class="react-count">0</span></button>
+                <button type="button" class="react-btn" data-react="laugh">😂 <span class="react-count">0</span></button>
+              </div>
+            </div>
 
+            <div>
+              <h4 class="text-sm font-semibold mb-3">💬 Bình luận (<span id="comment-count">0</span>)</h4>
+
+              <div id="comment-login-prompt" class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border th-border text-xs mb-4">
+                <span>Đăng nhập bằng Google để thả cảm xúc và bình luận cùng mọi người nhé.</span>
+                <button type="button" id="comment-google-login-btn" class="px-3 py-1.5 rounded-lg text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+                  Đăng nhập Google
+                </button>
+              </div>
+
+              <form id="comment-form" class="mb-4 space-y-2" hidden>
+                <textarea id="comment-input" rows="3" maxlength="500" required
+                  placeholder="Viết cảm nhận của bạn về chương này (tối đa 500 ký tự)..."
+                  class="w-full p-3 rounded-xl border th-border bg-transparent text-sm focus:outline-none"></textarea>
+                <div class="flex items-center justify-between">
+                  <span id="comment-char-count" class="text-xs th-text-muted">0 / 500</span>
+                  <button type="submit" id="comment-submit-btn" class="px-4 py-1.5 rounded-lg text-white text-xs font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
+                    Gửi bình luận
+                  </button>
+                </div>
+              </form>
+
+              <ul id="comment-list" class="space-y-3"></ul>
+            </div>
+          </section>
       if (mode === "series") {
         const ser = getVisibleSeries().find((s) => s.id === id);
         if (!ser) return;
@@ -4291,6 +4408,354 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
+}
+    // --- CẢM XÚC & BÌNH LUẬN CUỐI CHƯƠNG (TỰ ĐỒNG BỘ THEO CHƯƠNG ĐANG MỞ) ---
+{
+  const ADMIN_EMAIL = 'nguyenngocminhanhhh21@gmail.com';
+  const rAuth = getAuth();
+  const rDb = getFirestore();
+  const googleProvider = new GoogleAuthProvider();
+
+  let activeChapterKey = null;
+  let reactionsMap = {};
+
+  const escapeHTML = (s = '') =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const formatTime = (ts) => {
+    if (!ts) return 'Vừa xong';
+    const d = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'Vừa xong';
+    if (mins < 60) return `${mins} phút trước`;
+    if (mins < 1440) return `${Math.floor(mins / 60)} giờ trước`;
+    return d.toLocaleDateString('vi-VN');
+  };
+
+  function getRealUser() {
+    const u = rAuth.currentUser;
+    return u && !u.isAnonymous ? u : null;
+  }
+
+  function syncAuthUI() {
+    const user = getRealUser();
+    const promptEl = document.getElementById('comment-login-prompt');
+    const formEl = document.getElementById('comment-form');
+    if (promptEl) promptEl.hidden = Boolean(user);
+    if (formEl) formEl.hidden = !user;
+    renderReactions();
+  }
+
+  function renderReactions() {
+    const counts = { heart: 0, cry: 0, wow: 0, laugh: 0 };
+    Object.values(reactionsMap).forEach((t) => { if (counts[t] !== undefined) counts[t]++; });
+    const user = getRealUser();
+    const myReact = user ? reactionsMap[user.uid] : null;
+    document.querySelectorAll('#reaction-bar .react-btn').forEach((btn) => {
+      const t = btn.dataset.react;
+      const c = btn.querySelector('.react-count');
+      if (c) c.textContent = String(counts[t] || 0);
+      btn.classList.toggle('is-active', myReact === t);
+    });
+  }
+
+  function renderComments(comments) {
+    const listEl = document.getElementById('comment-list');
+    const countEl = document.getElementById('comment-count');
+    if (!listEl) return;
+    if (countEl) countEl.textContent = String(comments.length);
+    if (!comments.length) {
+      listEl.innerHTML = `<li class="text-xs th-text-muted text-center py-4">Chưa có bình luận nào. Mở bát cảm nhận đầu tiên nhé!</li>`;
+      return;
+    }
+    const user = getRealUser();
+    const isAdmin = Boolean(user && user.email === ADMIN_EMAIL);
+
+    listEl.innerHTML = comments.map((c) => {
+      const canDel = Boolean(user && (user.uid === c.uid || isAdmin));
+      const photo = typeof c.authorPhoto === 'string' && /^(https:\/\/|\/)/.test(c.authorPhoto) ? c.authorPhoto : '/icon-192.png';
+      return `
+        <li class="flex gap-2.5 p-3 rounded-xl border th-border">
+          <img src="${escapeHTML(photo)}" alt="" class="w-8 h-8 rounded-full object-cover shrink-0" loading="lazy" />
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5 text-xs mb-1">
+              <strong>${escapeHTML(c.authorName || 'Độc giả')}</strong>
+              ${c.isAuthor ? '<span class="author-badge">✍️ Tác giả</span>' : ''}
+              <span class="th-text-muted">• ${escapeHTML(formatTime(c.createdAt))}</span>
+              ${canDel ? `<button type="button" data-del-cmt="${escapeHTML(c.id)}" class="ml-auto text-red-500 hover:underline">Xóa</button>` : ''}
+            </div>
+            <p class="text-sm whitespace-pre-wrap break-words">${escapeHTML(c.text)}</p>
+          </div>
+        </li>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-del-cmt]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!activeChapterKey || !confirm('Xóa bình luận này?')) return;
+        await deleteDoc(doc(rDb, 'chapterEngagement', activeChapterKey, 'comments', btn.dataset.delCmt));
+        btn.closest('li')?.remove();
+        if (countEl) countEl.textContent = String(listEl.querySelectorAll('li').length);
+      });
+    });
+  }
+
+  async function loadEngagementForKey(key) {
+    if (!key || key === activeChapterKey) return;
+    activeChapterKey = key;
+    reactionsMap = {};
+    syncAuthUI();
+
+    const [rRes, cRes] = await Promise.allSettled([
+      getDoc(doc(rDb, 'chapterEngagement', key)),
+      getDocs(query(collection(rDb, 'chapterEngagement', key, 'comments'), orderBy('createdAt', 'desc'), limit(30)))
+    ]);
+
+    if (rRes.status === 'fulfilled' && rRes.value.exists()) {
+      reactionsMap = rRes.value.data().byUser || {};
+    }
+    renderReactions();
+    if (cRes.status === 'fulfilled') {
+      renderComments(cRes.value.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }
+  }
+
+  // Đăng nhập nhanh bằng Google
+  document.getElementById('comment-google-login-btn')?.addEventListener('click', () => {
+    signInWithPopup(rAuth, googleProvider).catch(() => {});
+  });
+
+  // Bấm thả cảm xúc
+  document.querySelectorAll('#reaction-bar .react-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!activeChapterKey) return;
+      if (!getRealUser()) {
+        try { await signInWithPopup(rAuth, googleProvider); } catch { return; }
+      }
+      const user = getRealUser();
+      if (!user) return;
+      const type = btn.dataset.react;
+      const prev = reactionsMap[user.uid];
+      const removing = prev === type;
+      if (removing) delete reactionsMap[user.uid]; else reactionsMap[user.uid] = type;
+      renderReactions();
+      try {
+        await setDoc(doc(rDb, 'chapterEngagement', activeChapterKey), {
+          byUser: { [user.uid]: removing ? deleteField() : type }
+        }, { merge: true });
+      } catch {
+        if (prev) reactionsMap[user.uid] = prev; else delete reactionsMap[user.uid];
+        renderReactions();
+      }
+    });
+  });
+
+  // Đếm ký tự & gửi bình luận
+  const cmtInput = document.getElementById('comment-input');
+  const cmtChar = document.getElementById('comment-char-count');
+  cmtInput?.addEventListener('input', () => {
+    if (cmtChar) cmtChar.textContent = `${cmtInput.value.length} / 500`;
+  });
+
+  document.getElementById('comment-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const user = getRealUser();
+    const text = cmtInput?.value.trim();
+    if (!user || !activeChapterKey || !text) return;
+    const submitBtn = document.getElementById('comment-submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await addDoc(collection(rDb, 'chapterEngagement', activeChapterKey, 'comments'), {
+        uid: user.uid,
+        authorName: user.displayName || 'Độc giả Thư giãn',
+        authorPhoto: user.photoURL || '/icon-192.png',
+        isAuthor: user.email === ADMIN_EMAIL,
+        text,
+        createdAt: serverTimestamp()
+      });
+      cmtInput.value = '';
+      if (cmtChar) cmtChar.textContent = '0 / 500';
+      const snap = await getDocs(query(collection(rDb, 'chapterEngagement', activeChapterKey, 'comments'), orderBy('createdAt', 'desc'), limit(30)));
+      renderComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Tự động nhận biết mỗi khi độc giả mở chương mới qua tiêu đề trên thanh công cụ
+  const titleEl = document.getElementById('reader-top-title');
+  const metaEl = document.getElementById('reader-top-meta');
+  if (titleEl) {
+    const observer = new MutationObserver(() => {
+      const raw = `${titleEl.textContent || ''}_${metaEl?.textContent || ''}`.trim();
+      if (!raw || raw === '_') return;
+      const safeKey = encodeURIComponent(raw).replace(/%/g, '_').slice(0, 120);
+      loadEngagementForKey(safeKey);
+    });
+    observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
+  }
+
+  onAuthStateChanged(rAuth, () => syncAuthUI());
+}
+    // --- TỦ SÁCH & GÓC CÁ NHÂN ĐỘC GIẢ (LOCALSTORAGE + FIRESTORE) ---
+{
+  const BS_KEY = 'thugian_bookshelf_v2';
+  const bsAuth = getAuth();
+  const bsDb = getFirestore();
+  const bsProvider = new GoogleAuthProvider();
+
+  let savedStories = [];
+  try {
+    savedStories = JSON.parse(localStorage.getItem(BS_KEY)) || [];
+  } catch { savedStories = []; }
+
+  const modal = document.getElementById('bookshelf-modal');
+  const openBtn = document.getElementById('open-bookshelf-btn');
+  const closeBtn = document.getElementById('close-bookshelf-btn');
+  const countBadge = document.getElementById('header-saved-count');
+  const listEl = document.getElementById('bs-story-list');
+  const syncEl = document.getElementById('bs-sync-status');
+
+  function getRealReader() {
+    const u = bsAuth.currentUser;
+    return u && !u.isAnonymous ? u : null;
+  }
+
+  async function saveBookshelf() {
+    localStorage.setItem(BS_KEY, JSON.stringify(savedStories));
+    renderBookshelfUI();
+    const user = getRealReader();
+    if (user) {
+      try {
+        await setDoc(doc(bsDb, 'readerProfiles', user.uid), {
+          savedStories,
+          updatedAt: Date.now()
+        }, { merge: true });
+        if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
+      } catch {
+        if (syncEl) syncEl.textContent = 'Lưu trên máy';
+      }
+    }
+  }
+
+  function renderBookshelfUI() {
+    if (countBadge) countBadge.textContent = String(savedStories.length);
+    if (!listEl) return;
+
+    if (!savedStories.length) {
+      listEl.innerHTML = `<li class="text-xs th-text-muted text-center py-4">Chưa có truyện nào. Mở đọc một chương rồi bấm nút ❤️ Theo dõi nhé!</li>`;
+      return;
+    }
+
+    listEl.innerHTML = savedStories.map((item, idx) => `
+      <li class="flex items-center justify-between gap-2 p-2.5 rounded-xl border th-border">
+        <div class="min-w-0">
+          <p class="font-semibold text-xs truncate">${item.title}</p>
+          <p class="text-[11px] th-text-muted truncate">${item.meta || 'Đang theo dõi'}</p>
+        </div>
+        <button type="button" data-rm-bs="${idx}" class="px-2 py-1 rounded-lg border th-border text-[11px] text-red-500 shrink-0">Bỏ lưu</button>
+      </li>
+    `).join('');
+
+    listEl.querySelectorAll('[data-rm-bs]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        savedStories.splice(Number(btn.dataset.rmBs), 1);
+        saveBookshelf();
+        updateReaderFollowBtn();
+      });
+    });
+  }
+
+  // Tự động gắn nút "❤️ Theo dõi" ngay cạnh nút 🔖 trong trình đọc
+  const bookmarkBtn = document.getElementById('reader-bookmark-btn');
+  let followBtn = document.getElementById('reader-follow-btn');
+  if (bookmarkBtn && !followBtn) {
+    followBtn = document.createElement('button');
+    followBtn.type = 'button';
+    followBtn.id = 'reader-follow-btn';
+    followBtn.className = 'px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-semibold hover:opacity-85';
+    followBtn.title = 'Lưu truyện vào Tủ sách';
+    bookmarkBtn.insertAdjacentElement('afterend', followBtn);
+
+    followBtn.addEventListener('click', () => {
+      const title = document.getElementById('reader-top-title')?.textContent?.trim();
+      const meta = document.getElementById('reader-top-meta')?.textContent?.trim() || '';
+      if (!title) return;
+      const idx = savedStories.findIndex((s) => s.title === title);
+      if (idx >= 0) savedStories.splice(idx, 1);
+      else savedStories.unshift({ title, meta, savedAt: Date.now() });
+      saveBookshelf();
+      updateReaderFollowBtn();
+    });
+  }
+
+  function updateReaderFollowBtn() {
+    if (!followBtn) return;
+    const title = document.getElementById('reader-top-title')?.textContent?.trim();
+    const isSaved = Boolean(title && savedStories.some((s) => s.title === title));
+    followBtn.textContent = isSaved ? '❤️ Đã lưu' : '🤍 Theo dõi';
+  }
+
+  // Mở / đóng modal Tủ sách
+  openBtn?.addEventListener('click', () => {
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+    renderBookshelfUI();
+  });
+  const closeModal = () => {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+  };
+  closeBtn?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+  // Đăng nhập / Đăng xuất trong góc Cá nhân
+  document.getElementById('bs-google-login-btn')?.addEventListener('click', () => {
+    signInWithPopup(bsAuth, bsProvider).catch(() => {});
+  });
+  document.getElementById('bs-logout-btn')?.addEventListener('click', () => {
+    signOut(bsAuth);
+  });
+
+  // Đồng bộ khi đăng nhập
+  onAuthStateChanged(bsAuth, async (user) => {
+    const realUser = user && !user.isAnonymous ? user : null;
+    const guestBox = document.getElementById('bs-guest-box');
+    const userBox = document.getElementById('bs-user-box');
+
+    if (!realUser) {
+      guestBox?.classList.remove('hidden');
+      userBox?.classList.add('hidden');
+      if (syncEl) syncEl.textContent = 'Lưu trên máy';
+      return;
+    }
+
+    guestBox?.classList.add('hidden');
+    userBox?.classList.remove('hidden');
+    document.getElementById('bs-user-avatar').src = realUser.photoURL || '/icon-192.png';
+    document.getElementById('bs-user-name').textContent = realUser.displayName || 'Độc giả Thư giãn';
+    document.getElementById('bs-user-email').textContent = realUser.email || '';
+
+    try {
+      const snap = await getDoc(doc(bsDb, 'readerProfiles', realUser.uid));
+      if (snap.exists() && Array.isArray(snap.data().savedStories)) {
+        const cloudList = snap.data().savedStories;
+        const map = new Map();
+        [...cloudList, ...savedStories].forEach((s) => map.set(s.title, s));
+        savedStories = Array.from(map.values());
+        await saveBookshelf();
+      }
+      if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
+    } catch {}
+    updateReaderFollowBtn();
+  });
+
+  // Tự cập nhật trạng thái nút Theo dõi khi mở truyện khác
+  const topTitle = document.getElementById('reader-top-title');
+  if (topTitle) {
+    new MutationObserver(updateReaderFollowBtn).observe(topTitle, { childList: true, characterData: true, subtree: true });
+  }
+
+  renderBookshelfUI();
 }
   </script>
 </body>
