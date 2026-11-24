@@ -398,6 +398,23 @@
   transform: scale(1.18);
 }
   </style>
+  <!-- PWA & Open Graph chia sẻ link -->
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#f9a8d4" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Thư giãn" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Thư giãn" />
+<meta property="og:locale" content="vi_VN" />
+<meta property="og:url" content="https://chothugiancho-chinhminh.vercel.app/" />
+<meta property="og:title" content="Thư giãn — Nguyệt san tiểu thuyết & Thư viện Ebook" />
+<meta property="og:description" content="Góc nhỏ đọc truyện, tải ebook PDF/EPUB miễn phí và chill cùng nhạc nền bốn mùa." />
+<meta property="og:image" content="https://chothugiancho-chinhminh.vercel.app/og-cover.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-pink-300/30">
 
@@ -4269,6 +4286,12 @@ p { text-align: justify; margin-bottom: 0.95em; }
 
   applyState();
 })();
+    // --- ĐĂNG KÝ SERVICE WORKER (PWA) ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
   </script>
 </body>
 </html>
