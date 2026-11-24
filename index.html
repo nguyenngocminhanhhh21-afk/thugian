@@ -558,10 +558,19 @@
             </select>
             <span class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] th-text-muted">▼</span>
           </div>
-<button
   type="button"
   id="toggle-effects-btn"
-  <button
+ <button
+  type="button"
+  id="toggle-effects-btn"
+  class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
+  title="Bật hoặc tắt hiệu ứng thời tiết cho đỡ hao pin"
+>
+  <span id="toggle-effects-icon">✨</span>
+  <span class="hidden sm:inline">Hiệu ứng</span>
+</button>
+
+<button
   type="button"
   id="open-bookshelf-btn"
   class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
@@ -571,13 +580,6 @@
   <span class="hidden sm:inline">Tủ sách</span>
   <span id="header-saved-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white" style="background:linear-gradient(135deg,#60a5fa,#f472b6);">0</span>
 </button>
-  class="px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-medium hover:opacity-80 inline-flex items-center gap-1"
-  title="Bật hoặc tắt hiệu ứng thời tiết cho đỡ hao pin"
->
-  <span id="toggle-effects-icon">✨</span>
-  <span class="hidden sm:inline">Hiệu ứng</span>
-</button>
-          <button
             type="button"
             onclick="app.toggleMusicDrawer()"
             title="Mở / Thu gọn trình phát nhạc"
