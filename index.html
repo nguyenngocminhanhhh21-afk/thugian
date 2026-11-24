@@ -1702,13 +1702,9 @@ service cloud.firestore {
           state.ownerUser = user;
           state.anonUid = user.uid;
           state.ownerLoginError = "";
-        } else {
-          if (user && !user.isAnonymous) {
-            try { await signOut(auth); } catch {}
-            state.ownerLoginError = "Tài khoản này không được cấp quyền Chủ web.";
-          }
+       } else {
           state.ownerUser = null;
-          state.anonUid = null;
+          state.anonUid = user ? user.uid : null;
         }
         const isOwner = isOwnerAuthenticated();
         document.getElementById("owner-status-dot").classList.toggle("hidden", !isOwner);
@@ -2451,42 +2447,6 @@ service cloud.firestore {
 <head><meta charset="utf-8"/><title>${escXml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body class="cover-body">
   <div class="cover-wrap"><img src="images/cover.jpg" alt="${escXml(title)}"/></div>
-  <!-- Modal Tủ sách & Góc cá nhân độc giả -->
-<div id="bookshelf-modal" class="fixed inset-0 z-[80] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);">
-  <div class="w-full max-w-md rounded-2xl border th-border th-card p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-    <div class="flex items-center justify-between border-b th-border pb-3">
-      <h3 class="font-bold text-base">📚 Tủ sách & Cá nhân</h3>
-      <button type="button" id="close-bookshelf-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">✕</button>
-    </div>
-
-    <!-- Chưa đăng nhập -->
-    <div id="bs-guest-box" class="p-3.5 rounded-xl border th-border text-xs space-y-2.5">
-      <p>Đăng nhập Google để đồng bộ Tủ sách giữa điện thoại và máy tính (chưa đăng nhập vẫn lưu được ngay trên máy này).</p>
-      <button type="button" id="bs-google-login-btn" class="w-full py-2 rounded-xl text-white font-semibold" style="background:linear-gradient(135deg,#3b82f6,#ec4899);">
-        Đăng nhập với Google
-      </button>
-    </div>
-
-    <!-- Đã đăng nhập -->
-    <div id="bs-user-box" class="hidden flex items-center gap-3 p-3 rounded-xl border th-border">
-      <img id="bs-user-avatar" src="/icon-192.png" alt="" class="w-10 h-10 rounded-full object-cover border border-pink-300" />
-      <div class="flex-1 min-w-0">
-        <p id="bs-user-name" class="text-sm font-bold truncate"></p>
-        <p id="bs-user-email" class="text-[11px] th-text-muted truncate"></p>
-      </div>
-      <button type="button" id="bs-logout-btn" class="px-2.5 py-1 rounded-lg border th-border text-xs">Đăng xuất</button>
-    </div>
-
-    <!-- Danh sách truyện đã lưu -->
-    <div class="space-y-2">
-      <div class="flex items-center justify-between">
-        <h4 class="text-xs font-bold uppercase tracking-wide th-text-muted">Truyện đang theo dõi</h4>
-        <span id="bs-sync-status" class="text-[11px] th-text-muted">Lưu trên máy</span>
-      </div>
-      <ul id="bs-story-list" class="space-y-2 text-sm"></ul>
-    </div>
-  </div>
-</div>
 </body>
 </html>`);
         }
@@ -3547,8 +3507,7 @@ p { text-align: justify; margin-bottom: 0.95em; }
           <button
             type="button"
             onclick="app.jumpToMergedChapter(${idx})"
-            class="w-full text-left px-3 py-2 rounded-xl border th-border th-subtle hover:opacity-85 transition-opacity block"
-          >
+            class="w-full text-left px-3 py-2 rounded-xl border th-border th-subtle hover:opacity-85 transition-opacity block">
             <span class="font-mono text-[10px] th-pink font-semibold block">${esc(ch.issue || `Phần ${idx + 1}`)}</span>
             <span class="font-medium line-clamp-2">${esc(ch.title)}</span>
           </button>`).join("");
@@ -4596,113 +4555,163 @@ if ('serviceWorker' in navigator) {
   onAuthStateChanged(rAuth, () => syncAuthUI());
 }
 
-        <button type="button" data-rm-bs="${idx}" class="px-2 py-1 rounded-lg border th-border text-[11px] text-red-500 shrink-0">Bỏ lưu</button>
-      </li>
-    `).join('');
+       // --- TỦ SÁCH & GÓC CÁ NHÂN ĐỘC GIẢ (LOCALSTORAGE + FIRESTORE) ---
+    {
+      const BS_KEY = 'thugian_bookshelf_v2';
+      const bsAuth = getAuth();
+      const bsDb = getFirestore();
+      const bsProvider = new GoogleAuthProvider();
 
-    listEl.querySelectorAll('[data-rm-bs]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        savedStories.splice(Number(btn.dataset.rmBs), 1);
-        saveBookshelf();
+      let savedStories = [];
+      try {
+        savedStories = JSON.parse(localStorage.getItem(BS_KEY)) || [];
+      } catch { savedStories = []; }
+
+      const modal = document.getElementById('bookshelf-modal');
+      const openBtn = document.getElementById('open-bookshelf-btn');
+      const closeBtn = document.getElementById('close-bookshelf-btn');
+      const countBadge = document.getElementById('header-saved-count');
+      const listEl = document.getElementById('bs-story-list');
+      const syncEl = document.getElementById('bs-sync-status');
+
+      function getRealReader() {
+        const u = bsAuth.currentUser;
+        return u && !u.isAnonymous ? u : null;
+      }
+
+      async function saveBookshelf() {
+        localStorage.setItem(BS_KEY, JSON.stringify(savedStories));
+        renderBookshelfUI();
+        const user = getRealReader();
+        if (user) {
+          try {
+            await setDoc(doc(bsDb, 'readerProfiles', user.uid), {
+              savedStories,
+              updatedAt: Date.now()
+            }, { merge: true });
+            if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
+          } catch {
+            if (syncEl) syncEl.textContent = 'Lưu trên máy';
+          }
+        }
+      }
+
+      function renderBookshelfUI() {
+        if (countBadge) countBadge.textContent = String(savedStories.length);
+        if (!listEl) return;
+
+        if (!savedStories.length) {
+          listEl.innerHTML = `<li class="text-xs th-text-muted text-center py-4">Chưa có truyện nào. Mở đọc một chương rồi bấm nút ❤️ Theo dõi nhé!</li>`;
+          return;
+        }
+
+        listEl.innerHTML = savedStories.map((item, idx) => `
+          <li class="flex items-center justify-between gap-2 p-2.5 rounded-xl border th-border">
+            <div class="min-w-0">
+              <p class="font-semibold text-xs truncate">${item.title}</p>
+              <p class="text-[11px] th-text-muted truncate">${item.meta || 'Đang theo dõi'}</p>
+            </div>
+            <button type="button" data-rm-bs="${idx}" class="px-2 py-1 rounded-lg border th-border text-[11px] text-red-500 shrink-0">Bỏ lưu</button>
+          </li>
+        `).join('');
+
+        listEl.querySelectorAll('[data-rm-bs]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            savedStories.splice(Number(btn.dataset.rmBs), 1);
+            saveBookshelf();
+            updateReaderFollowBtn();
+          });
+        });
+      }
+
+      const bookmarkBtn = document.getElementById('reader-bookmark-btn');
+      let followBtn = document.getElementById('reader-follow-btn');
+      if (bookmarkBtn && !followBtn) {
+        followBtn = document.createElement('button');
+        followBtn.type = 'button';
+        followBtn.id = 'reader-follow-btn';
+        followBtn.className = 'px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-semibold hover:opacity-85';
+        followBtn.title = 'Lưu truyện vào Tủ sách';
+        bookmarkBtn.insertAdjacentElement('afterend', followBtn);
+
+        followBtn.addEventListener('click', () => {
+          const title = document.getElementById('reader-top-title')?.textContent?.trim();
+          const meta = document.getElementById('reader-top-meta')?.textContent?.trim() || '';
+          if (!title) return;
+          const idx = savedStories.findIndex((s) => s.title === title);
+          if (idx >= 0) savedStories.splice(idx, 1);
+          else savedStories.unshift({ title, meta, savedAt: Date.now() });
+          saveBookshelf();
+          updateReaderFollowBtn();
+        });
+      }
+
+      function updateReaderFollowBtn() {
+        if (!followBtn) return;
+        const title = document.getElementById('reader-top-title')?.textContent?.trim();
+        const isSaved = Boolean(title && savedStories.some((s) => s.title === title));
+        followBtn.textContent = isSaved ? '❤️ Đã lưu' : '🤍 Theo dõi';
+      }
+
+      openBtn?.addEventListener('click', () => {
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+        renderBookshelfUI();
+      });
+      const closeModal = () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+      };
+      closeBtn?.addEventListener('click', closeModal);
+      modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+      document.getElementById('bs-google-login-btn')?.addEventListener('click', () => {
+        signInWithPopup(bsAuth, bsProvider).catch(() => {});
+      });
+      document.getElementById('bs-logout-btn')?.addEventListener('click', () => {
+        signOut(bsAuth);
+      });
+
+      onAuthStateChanged(bsAuth, async (user) => {
+        const realUser = user && !user.isAnonymous ? user : null;
+        const guestBox = document.getElementById('bs-guest-box');
+        const userBox = document.getElementById('bs-user-box');
+
+        if (!realUser) {
+          guestBox?.classList.remove('hidden');
+          userBox?.classList.add('hidden');
+          if (syncEl) syncEl.textContent = 'Lưu trên máy';
+          return;
+        }
+
+        guestBox?.classList.add('hidden');
+        userBox?.classList.remove('hidden');
+        document.getElementById('bs-user-avatar').src = realUser.photoURL || '/icon-192.png';
+        document.getElementById('bs-user-name').textContent = realUser.displayName || 'Độc giả Thư giãn';
+        document.getElementById('bs-user-email').textContent = realUser.email || '';
+
+        try {
+          const snap = await getDoc(doc(bsDb, 'readerProfiles', realUser.uid));
+          if (snap.exists() && Array.isArray(snap.data().savedStories)) {
+            const cloudList = snap.data().savedStories;
+            const map = new Map();
+            [...cloudList, ...savedStories].forEach((s) => map.set(s.title, s));
+            savedStories = Array.from(map.values());
+            await saveBookshelf();
+          }
+          if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
+        } catch {}
         updateReaderFollowBtn();
       });
-    });
-  }
 
-  // Tự động gắn nút "❤️ Theo dõi" ngay cạnh nút 🔖 trong trình đọc
-  const bookmarkBtn = document.getElementById('reader-bookmark-btn');
-  let followBtn = document.getElementById('reader-follow-btn');
-  if (bookmarkBtn && !followBtn) {
-    followBtn = document.createElement('button');
-    followBtn.type = 'button';
-    followBtn.id = 'reader-follow-btn';
-    followBtn.className = 'px-2.5 py-1.5 rounded-xl border th-border th-subtle text-xs font-semibold hover:opacity-85';
-    followBtn.title = 'Lưu truyện vào Tủ sách';
-    bookmarkBtn.insertAdjacentElement('afterend', followBtn);
-
-    followBtn.addEventListener('click', () => {
-      const title = document.getElementById('reader-top-title')?.textContent?.trim();
-      const meta = document.getElementById('reader-top-meta')?.textContent?.trim() || '';
-      if (!title) return;
-      const idx = savedStories.findIndex((s) => s.title === title);
-      if (idx >= 0) savedStories.splice(idx, 1);
-      else savedStories.unshift({ title, meta, savedAt: Date.now() });
-      saveBookshelf();
-      updateReaderFollowBtn();
-    });
-  }
-
-  function updateReaderFollowBtn() {
-    if (!followBtn) return;
-    const title = document.getElementById('reader-top-title')?.textContent?.trim();
-    const isSaved = Boolean(title && savedStories.some((s) => s.title === title));
-    followBtn.textContent = isSaved ? '❤️ Đã lưu' : '🤍 Theo dõi';
-  }
-
-  // Mở / đóng modal Tủ sách
-  openBtn?.addEventListener('click', () => {
-    modal?.classList.remove('hidden');
-    modal?.classList.add('flex');
-    renderBookshelfUI();
-  });
-  const closeModal = () => {
-    modal?.classList.add('hidden');
-    modal?.classList.remove('flex');
-  };
-  closeBtn?.addEventListener('click', closeModal);
-  modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-  // Đăng nhập / Đăng xuất trong góc Cá nhân
-  document.getElementById('bs-google-login-btn')?.addEventListener('click', () => {
-    signInWithPopup(bsAuth, bsProvider).catch(() => {});
-  });
-  document.getElementById('bs-logout-btn')?.addEventListener('click', () => {
-    signOut(bsAuth);
-  });
-
-  // Đồng bộ khi đăng nhập
-  onAuthStateChanged(bsAuth, async (user) => {
-    const realUser = user && !user.isAnonymous ? user : null;
-    const guestBox = document.getElementById('bs-guest-box');
-    const userBox = document.getElementById('bs-user-box');
-
-    if (!realUser) {
-      guestBox?.classList.remove('hidden');
-      userBox?.classList.add('hidden');
-      if (syncEl) syncEl.textContent = 'Lưu trên máy';
-      return;
-    }
-
-    guestBox?.classList.add('hidden');
-    userBox?.classList.remove('hidden');
-    document.getElementById('bs-user-avatar').src = realUser.photoURL || '/icon-192.png';
-    document.getElementById('bs-user-name').textContent = realUser.displayName || 'Độc giả Thư giãn';
-    document.getElementById('bs-user-email').textContent = realUser.email || '';
-
-    try {
-      const snap = await getDoc(doc(bsDb, 'readerProfiles', realUser.uid));
-      if (snap.exists() && Array.isArray(snap.data().savedStories)) {
-        const cloudList = snap.data().savedStories;
-        const map = new Map();
-        [...cloudList, ...savedStories].forEach((s) => map.set(s.title, s));
-        savedStories = Array.from(map.values());
-        await saveBookshelf();
+      const topTitle = document.getElementById('reader-top-title');
+      if (topTitle) {
+        new MutationObserver(updateReaderFollowBtn).observe(topTitle, { childList: true, characterData: true, subtree: true });
       }
-      if (syncEl) syncEl.textContent = '☁️ Đã đồng bộ';
-    } catch {}
-    updateReaderFollowBtn();
-  });
 
-  // Tự cập nhật trạng thái nút Theo dõi khi mở truyện khác
-  const topTitle = document.getElementById('reader-top-title');
-  if (topTitle) {
-    new MutationObserver(updateReaderFollowBtn).observe(topTitle, { childList: true, characterData: true, subtree: true });
-  }
-
-  renderBookshelfUI();
-}
+      renderBookshelfUI();
+    }
   </script>
-</body>
   <!-- Modal Tủ sách & Góc cá nhân độc giả -->
 <div id="bookshelf-modal" class="fixed inset-0 z-[80] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);">
   <div class="w-full max-w-md rounded-2xl border th-border th-card p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
@@ -4739,4 +4748,5 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 </div>
+  </body>
 </html>
